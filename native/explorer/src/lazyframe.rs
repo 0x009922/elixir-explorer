@@ -360,6 +360,55 @@ pub fn lf_join(
 }
 
 #[rustler::nif]
+pub fn lf_join_asof(
+    data: ExLazyFrame,
+    other: ExLazyFrame,
+    left_on: Vec<ExExpr>,
+    right_on: Vec<ExExpr>,
+    strategy: &str,
+    // TODO: include tolerance as numeric or as str
+    // tolerance: &str,
+    // tolerance_str: Option<PlSmallStr>,
+    allow_eq: bool,
+    suffix: &str,
+) -> Result<ExLazyFrame, ExplorerError> {
+    let strategy = match strategy {
+        "forward" => AsofStrategy::Forward,
+        "backward" => AsofStrategy::Backward,
+        "nearest" => AsofStrategy::Nearest,
+        other => {
+            return Err(ExplorerError::Other(format!(
+                "Join-asof strategy {other} not supported"
+            )))
+        }
+    };
+
+    let options = AsOfOptions {
+        strategy,
+        tolerance: None,
+        tolerance_str: None,
+        allow_eq,
+        left_by: None,
+        right_by: None,
+        check_sortedness: true,
+    };
+
+    let ldf = data.clone_inner();
+    let ldf1 = other.clone_inner();
+
+    let new_ldf = ldf
+        .join_builder()
+        .with(ldf1)
+        .how(JoinType::AsOf(options))
+        .left_on(ex_expr_to_exprs(left_on))
+        .right_on(ex_expr_to_exprs(right_on))
+        .suffix(suffix)
+        .finish();
+
+    Ok(ExLazyFrame::new(new_ldf))
+}
+
+#[rustler::nif]
 pub fn lf_concat_rows(lazy_frames: Vec<ExLazyFrame>) -> Result<ExLazyFrame, ExplorerError> {
     let inputs: Vec<LazyFrame> = lazy_frames.iter().map(|lf| lf.clone_inner()).collect();
     let union_args = UnionArgs::default();

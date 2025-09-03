@@ -2561,6 +2561,72 @@ defmodule Explorer.DataFrameTest do
     end
   end
 
+  describe "join_asof/3" do
+    defp create_gdp() do
+      DF.new(
+        date: 2016..2020 |> Enum.map(&Date.new!(&1, 1, 1)),
+        gdp: [4164, 4411, 4566, 4696, 4827]
+      )
+    end
+
+    defp create_population() do
+      DF.new(
+        date: [
+          ~D[2016-03-01],
+          ~D[2018-08-01],
+          ~D[2019-01-01]
+        ],
+        population: [
+          82.19,
+          82.66,
+          83.12
+        ]
+      )
+    end
+
+    test "backward" do
+      left = create_population()
+      right = create_gdp()
+
+      joined = DF.join_asof(left, right, on: [:date], strategy: :backward)
+
+      assert DF.to_columns(joined, atom_keys: true) == %{
+               date: [
+                 ~D[2016-03-01],
+                 ~D[2018-08-01],
+                 ~D[2019-01-01]
+               ],
+               population: [
+                 82.19,
+                 82.66,
+                 83.12
+               ],
+               gdp: [4164, 4566, 4696]
+             }
+    end
+
+    test "forward" do
+      left = create_population()
+      right = create_gdp()
+
+      joined = DF.join_asof(left, right, on: [:date], strategy: :forward)
+
+      assert DF.to_columns(joined, atom_keys: true) == %{
+               date: [
+                 ~D[2016-03-01],
+                 ~D[2018-08-01],
+                 ~D[2019-01-01]
+               ],
+               population: [
+                 82.19,
+                 82.66,
+                 83.12
+               ],
+               gdp: [4411, 4696, 4696]
+             }
+    end
+  end
+
   describe "table/1" do
     test "prints 5 rows by default" do
       df = Datasets.iris()

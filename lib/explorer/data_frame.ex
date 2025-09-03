@@ -5437,6 +5437,67 @@ defmodule Explorer.DataFrame do
       end)
   end
 
+  @doc type: :multi
+  def join_asof(%DataFrame{} = left, %DataFrame{} = right, opts \\ []) do
+    left_columns = left.names
+    right_columns = right.names
+
+    opts =
+      Keyword.validate!(opts,
+        on: find_overlapping_columns(left_columns, right_columns),
+        strategy: :forward,
+        tolerance: nil,
+        allow_eq: true
+      )
+
+    strategy = opts[:strategy]
+
+    # unless opts[:how] in @valid_join_types do
+    #   raise ArgumentError,
+    #         "join type is not valid: #{inspect(opts[:how])}. " <>
+    #           "Valid options are: #{Enum.map_join(@valid_join_types, ", ", &inspect/1)}"
+    # end
+
+    on =
+      case List.wrap(opts[:on]) do
+        [] ->
+          raise(ArgumentError, "could not find any overlapping columns")
+
+        [_ | _] = on ->
+          normalized_on =
+            Enum.map(on, fn
+              {l_name, r_name} ->
+                [l_column] = to_existing_columns(left, [l_name])
+                [r_column] = to_existing_columns(right, [r_name])
+                {l_column, r_column}
+
+              name ->
+                [l_column] = to_existing_columns(left, [name])
+                [r_column] = to_existing_columns(right, [name])
+
+                # This is an edge case for when an index is passed as column selection
+                if l_column != r_column do
+                  raise ArgumentError,
+                        "the column given to option `:on` is not the same for both dataframes"
+                end
+
+                {l_column, r_column}
+            end)
+
+          normalized_on
+      end
+
+    out_df = out_df_for_join(strategy, left, right, on)
+
+    Shared.apply_dataframe([left, right], :join_asof, [
+      out_df,
+      on,
+      strategy,
+      # opts[:tolerance],
+      opts[:allow_eq]
+    ])
+  end
+
   @doc """
   Combine two or more dataframes column-wise.
 
